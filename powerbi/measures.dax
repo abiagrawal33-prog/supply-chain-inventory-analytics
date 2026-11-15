@@ -1,0 +1,73 @@
+// =====================================================================
+// Power BI measures for the Inventory Performance report
+// Model: star schema built by dbt (marts schema)
+//   fct_inventory_weekly  ->  dim_store, dim_product, dim_week, dim_distribution_center
+// =====================================================================
+
+// ---------- Core volume ----------
+Sales $ = SUM ( fct_inventory_weekly[sales_dollars] )
+Lost Sales $ = SUM ( fct_inventory_weekly[lost_sales_dollars] )
+Demand $ = [Sales $] + [Lost Sales $]
+Lost Sales % = DIVIDE ( [Lost Sales $], [Demand $] )
+
+// ---------- In-stock ----------
+Store SKU Weeks = COUNTROWS ( fct_inventory_weekly )
+Stockout Weeks =
+    CALCULATE ( [Store SKU Weeks], fct_inventory_weekly[is_stockout] = TRUE () )
+In-Stock % = 1 - DIVIDE ( [Stockout Weeks], [Store SKU Weeks] )
+
+In-Stock % Prior Week =
+    VAR CurrentWeek = MAX ( dim_week[week_number] )
+    RETURN
+        CALCULATE ( [In-Stock %], REMOVEFILTERS ( dim_week ), dim_week[week_number] = CurrentWeek - 1 )
+
+In-Stock % WoW Change = [In-Stock %] - [In-Stock % Prior Week]
+
+In-Stock % Rolling 4 Wk =
+    VAR CurrentWeek = MAX ( dim_week[week_number] )
+    RETURN
+        CALCULATE (
+            [In-Stock %],
+            REMOVEFILTERS ( dim_week ),
+            dim_week[week_number] > CurrentWeek - 4,
+            dim_week[week_number] <= CurrentWeek
+        )
+
+In-Stock Target = 0.95
+In-Stock Status =
+    SWITCH (
+        TRUE (),
+        [In-Stock %] >= [In-Stock Target], "On target",
+        [In-Stock %] >= [In-Stock Target] - 0.03, "Watch",
+        "Action needed"
+    )
+
+// ---------- Forecast accuracy ----------
+// Computed at the grain of the visual. State the level on the report page!
+Forecast Units =
+    CALCULATE ( SUM ( fct_inventory_weekly[forecast_units] ), fct_inventory_weekly[is_missing_forecast] = FALSE () )
+Demand Units (Forecasted Rows) =
+    CALCULATE ( SUM ( fct_inventory_weekly[demand_units] ), fct_inventory_weekly[is_missing_forecast] = FALSE () )
+
+Abs Error Units =
+    SUMX (
+        FILTER ( fct_inventory_weekly, fct_inventory_weekly[is_missing_forecast] = FALSE () ),
+        ABS ( fct_inventory_weekly[forecast_units] - fct_inventory_weekly[demand_units] )
+    )
+
+WAPE = DIVIDE ( [Abs Error Units], [Demand Units (Forecasted Rows)] )
+Forecast Accuracy % = 1 - [WAPE]
+Forecast Bias % = DIVIDE ( [Forecast Units] - [Demand Units (Forecasted Rows)], [Demand Units (Forecasted Rows)] )
+
+// ---------- DC performance ----------
+DC Fill Rate =
+    DIVIDE ( SUM ( fct_inventory_weekly[dc_shipped_units] ), SUM ( fct_inventory_weekly[dc_ordered_units] ) )
+
+// ---------- Ranking ----------
+Store In-Stock Rank =
+    RANKX ( ALLSELECTED ( dim_store[store_name] ), [In-Stock %], , DESC, DENSE )
+
+Top N Lost Sales SKUs Flag =
+    VAR N = 10
+    RETURN
+        IF ( RANKX ( ALLSELECTED ( dim_product[sku] ), [Lost Sales $], , DESC ) <= N, 1, 0 )

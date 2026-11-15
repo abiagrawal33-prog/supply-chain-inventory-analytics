@@ -1,0 +1,20 @@
+version: 2
+
+models:
+  - name: stg_inventory_weekly
+    description: Typed store inventory positions with a missing-forecast flag.
+    columns:
+      - name: store_id
+        tests: [not_null]
+      - name: sku
+        tests: [not_null]
+      - name: sales_units
+        tests: [not_null]
+  - name: stg_stores
+    columns:
+      - name: store_id
+        tests: [unique, not_null]
+  - name: stg_products
+    columns:
+      - name: sku
+        tests: [unique, not_null]

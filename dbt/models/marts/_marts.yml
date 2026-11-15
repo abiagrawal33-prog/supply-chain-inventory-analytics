@@ -1,0 +1,75 @@
+version: 2
+
+models:
+  - name: dim_store
+    description: Store master with its servicing distribution center.
+    columns:
+      - name: store_id
+        tests: [unique, not_null]
+      - name: dc_id
+        tests:
+          - relationships: {arguments: {to: ref('dim_distribution_center'), field: dc_id}}
+      - name: store_format
+        tests:
+          - accepted_values: {arguments: {values: ['Urban', 'Suburban', 'Rural']}}
+
+  - name: dim_product
+    description: Product master with margin.
+    columns:
+      - name: sku
+        tests: [unique, not_null]
+      - name: category
+        tests: [not_null]
+
+  - name: dim_distribution_center
+    columns:
+      - name: dc_id
+        tests: [unique, not_null]
+
+  - name: dim_week
+    columns:
+      - name: week_start
+        tests: [unique, not_null]
+
+  - name: fct_inventory_weekly
+    description: Grain = store x SKU x week. Central fact for BI.
+    columns:
+      - name: store_id
+        tests:
+          - not_null
+          - relationships: {arguments: {to: ref('dim_store'), field: store_id}}
+      - name: sku
+        tests:
+          - not_null
+          - relationships: {arguments: {to: ref('dim_product'), field: sku}}
+      - name: week_start
+        tests:
+          - relationships: {arguments: {to: ref('dim_week'), field: week_start}}
+      - name: dc_shipped_units
+        description: Every store-SKU-week must have a matching DC shipment record.
+        tests: [not_null]
+
+  - name: mart_in_stock_weekly
+    description: In-stock rate by week x DC x category, with rolling 4-week and week-over-week change.
+    columns:
+      - name: in_stock_rate
+        tests: [not_null]
+
+  - name: mart_forecast_accuracy
+    description: WAPE, accuracy and bias by category x week, with rolling 4-week versions.
+
+  - name: mart_stockout_root_cause
+    description: Every stockout tagged with one primary root cause.
+    columns:
+      - name: root_cause
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['DC short-ship / late delivery', 'Forecast under-call', 'Safety stock too low', 'Demand variability']
+
+  - name: mart_store_scorecard
+    description: One row per store, ranked, with quartile and gap to region average.
+    columns:
+      - name: store_id
+        tests: [unique, not_null]

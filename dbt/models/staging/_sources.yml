@@ -1,0 +1,15 @@
+version: 2
+
+sources:
+  - name: raw
+    description: Raw extracts landed from the store inventory system, the demand planning tool and the DC warehouse management system.
+    meta:
+      external_location: "../data/raw/{name}.csv"
+    tables:
+      - name: stores
+      - name: products
+      - name: distribution_centers
+      - name: inventory_weekly
+        description: One row per store x SKU x week from the store inventory system.
+      - name: dc_shipments
+        description: One row per store x SKU x week from the DC warehouse management system.

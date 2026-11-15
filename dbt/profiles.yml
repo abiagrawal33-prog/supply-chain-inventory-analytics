@@ -1,0 +1,9 @@
+# DuckDB locally (zero setup). Swap the target to Snowflake or Databricks in production:
+# the SQL in /models only uses ANSI SQL + window functions so it ports cleanly.
+supply_chain_analytics:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "../warehouse/supply_chain.duckdb"
+      threads: 4
